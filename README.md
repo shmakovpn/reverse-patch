@@ -1,0 +1,188 @@
+# reverse_patch
+
+Unit-test writing revolution!!
+
+# The problem
+
+Let's try to write unit-test for something like this:
+
+```python
+# my_code.py
+def failed_function(x):
+    raise RuntimeError(f'failed_one: {x}')
+
+
+class FirstClass:
+    first_class_const = '_first_class_const'
+
+    def failed_method(self, x, y):
+        raise RuntimeError('_failed_method')
+
+    @classmethod
+    def failed_class_method(cls, x, y):
+        raise RuntimeError('_failed_class_method')
+
+    @staticmethod
+    def failed_static_method(x, y):
+        raise RuntimeError('_failed_static_method')
+
+    def success_method(self, method_argument):
+        id_ = id(method_argument)
+
+        self.failed_method(1, 2)
+        self.failed_class_method(1, 2)
+        self.failed_static_method(1, 2)
+        return failed_function(id_)
+```
+
+```python
+# pytest__my_code.py
+import my_code as tm
+from unittest.mock import patch, MagicMock
+
+
+class TestFirstClass:
+    def test_success_method(self):
+        """ Minimal test (without asserts) """
+        with patch.object(tm, 'id', create=True) as mock_id:  # 1
+            with patch.object(tm.FirstClass, 'failed_method') as mock_failed_method:  # 2
+                with patch.object(tm.FirstClass, 'failed_class_method') as mock_failed_class_method:  # 3
+                    with patch.object(tm.FirstClass, 'failed_static_method') as mock_failed_static_method:  # 4
+                        with patch.object(tm, 'failed_function') as mock_failed_function:  # 5
+                            with patch.object(tm.FirstClass, '__init__', return_value=None):  # 6
+                                fc = tm.FirstClass()
+                                mock_method_argument = MagicMock()  # 7
+                                result = fc.success_method(method_argument=mock_method_argument)
+```
+
+`FirstClass.success_method` does not have errors itself, but it calls other functions and methods that will fail.
+Thus, we need to mock them all.
+
+Generally, testing methods or functions call others those need database access, redis, etc.
+Those calls have to be mocked.
+
+You can do not mock something, but then you will test not only target method or function.
+You will test target method or function and all not mocked dependencies!!
+If there are many not mocked dependencies, your test will very complex, very hard to read and difficulty to support.
+
+In other hand we want only 1 failed test for 1 failed method. So, all dependencies have to be mocked.
+
+How you can see in example below, writing a minimal test with mocking all dependencies is very expensive.
+In the case below we need to write seven mocks to create a minimal test, that just performs successfully, but does not make any asserts.
+
+Let us do something. Let us write a new in `reverse style`.
+
+```python
+# pytest__my_code__reverse.py
+import my_code as tm
+from unittest.mock import patch, MagicMock
+
+
+class TestFirstClass:
+    def test_success_method(self):
+        """ Minimal test (without asserts) """
+        c = tm.FirstClass.success_method
+        mock_self = MagicMock()  # 1
+        with patch.object(tm, 'id', create=True) as mock_id:  # 2
+            with patch.object(tm, 'failed_function') as mock_failed_function:  # 3
+                mock_method_argument = MagicMock()  # 4
+                result = c(self=mock_self, method_argument=mock_method_argument)
+```
+
+`Reverse` way is better. One need to create four mocks, but it is expensive too.
+
+## The solution
+
+Please. Look at the code of reverse test. If you write more unit-tests in reverse style, you will checkout,
+that all test are very similar to each other.
+
+What happens if we mock all `scope` of testing method automatically in one statement?
+
+```python
+# pytest__my_code__reverse_patch.py
+import my_code as tm
+from reverse_patch import ReversePatch
+
+
+class TestFirstClass:
+    def test_success_method(self):
+        with ReversePatch(func=tm.FirstClass.success_method) as rp_dto:  # 1
+            result = rp_dto.c(*rp_dto.args)
+```
+
+Miracle!!
+
+All minimal tests needs only one mock!!
+
+## Full reverse_patch_test
+
+Let us add testing logic.
+
+```python
+# pytest__my_code__reverse_patch.py
+import my_code as tm
+from reverse_patch import ReversePatch
+
+
+class TestFirstClass:
+    def test_success_method(self):
+        """ 
+        full test (100% coverage), 
+        look pytest__reverse_patch.TestReversePatch.test_success_method for more information.
+        Run this test in debugger, play around.
+        """
+        with ReversePatch(func=tm.FirstClass.success_method) as rp_dto:  # 1 rp_dto contains all needed mocks
+            assert rp_dto.c(*rp_dto.args) == tm.failed_function.return_value  # assert 1
+            tm.failed_function.assert_called_once_with(tm.id.return_value)  # assert 2
+            tm.id.assert_called_once_with(rp_dto.args.method_argument)  # assert 3
+            rp_dto.args.self.failed_method.assert_called_once_with(1, 2)  # assert 4
+            rp_dto.args[0].failed_class_method.assert_called_once_with(1, 2)  # assert 5
+            rp_dto.args[0].failed_static_method.assert_called_once_with(1, 2)  # assert 6
+```
+
+Testing method contains five not empty lines and six simple statements, look
+
+```python
+    def success_method(self, method_argument):
+        id_ = id(method_argument)  # statement 1
+
+        self.failed_method(1, 2)  # statement 2
+        self.failed_class_method(1, 2)  # statement 3
+        self.failed_static_method(1, 2)  # statement 4
+        # return failed_function(id_)  
+        result = failed_function(id_)  # statement 5
+        return result  # statement 6
+```
+
+Great: 6 asserts for 6 statements!!
+
+Just imagine, that you did not write testing method from scratch. Then only one line was added, e.g. `my_other_func()`.
+Previously one need to write four or seven mocks, plus mock for `my_other_func`, 
+plus one or two asserts that checks: return value of `my_other_func`, and something like `assert_called_once_with`.
+
+The price is so hi, that one do not write them at all.
+
+```python
+class TestFirstClass:
+    def test_success_method(self):
+        with ReversePatch(func=tm.FirstClass.success_method) as rp_dto:
+            assert rp_dto.c(*rp_dto.args) == tm.failed_function.return_value
+            tm.my_other_func.assert_called_once_with()
+```
+
+The entry threshold has been drastically lowered. Such tests are much more likely to be written.
+
+## Examples
+
+Please, look `pytest__reverse_patch`, self-documented file contains the most usage examples, 
+those checks `ReversePatch` using `ReversePatch` itself.
+
+More useful examples:
+- TestReversePatch.test_success_method
+- TestReversePatch.test_success_class_method
+
+## Bonus
+
+All mocks created by `ReversePatch` created with `autospec`. 
+So your tests will defend your code against a human factor in the future, like a dirty refactoring.
+
