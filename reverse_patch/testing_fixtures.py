@@ -1,7 +1,17 @@
 """
 # testing fixtures for pytest__reverse_patch
 """
+import logging
+from unittest.mock import Mock, MagicMock
+
+logger = logging.getLogger('reverse_patch')
 MODULE_CONST = '_module_const'
+
+# SomeMock = Mock()
+# """Check that ReversePatch will not fail to infinity recursion, if a mock in the testing module"""
+#
+# SomeMagicMock = MagicMock()
+# """Check that ReversePatch will not fail to infinity recursion, if a magic mock in the testing module"""
 
 
 def failed_function(x):
@@ -182,3 +192,45 @@ class FirstClass:
         def second_fail_no_function(self):
             # try to call a function that does not exist, will raise NameError
             no_function()  # noqa
+
+
+class InitCase:
+    """
+    An instance of `InitCase` will have `x` and `y` attributes,
+    but `InitCase` will not have these attributes.
+    Because these are attributes of an instance, not the class.
+
+    Thus, mocks for these attributes will not create by default using `autospec=True`.
+    """
+    # there is no `x` attribute
+    # there is no `y` attribute
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def use_attrs_inited_in__init(self):
+        return self.x, self.y
+
+
+def do_log_debug_success():
+    """
+    Calls logger with right message template
+    """
+    logger.debug('debug %s', 'success')
+
+
+def do_log_debug_fail():
+    """
+    Calls logger with wrong message template
+    """
+    # TypeError: not all arguments converted during string formatting
+    logger.debug('debug %s', 'fail', 1)
+
+
+class ClassWithMocks:
+    # mock_attribute = Mock()
+    # magic_mock_attribute = Mock()
+
+    def some_method(self):
+        return f'hello {self.__class__.__name__}'

@@ -106,8 +106,8 @@ from reverse_patch import ReversePatch
 
 class TestFirstClass:
     def test_success_method(self):
-        with ReversePatch(func=tm.FirstClass.success_method) as rp_dto:  # 1
-            result = rp_dto.c(*rp_dto.args)
+        with ReversePatch(func=tm.FirstClass.success_method) as rp:  # 1
+            result = rp.c(*rp.args)
 ```
 
 Miracle!!
@@ -131,13 +131,13 @@ class TestFirstClass:
         look pytest__reverse_patch.TestReversePatch.test_success_method for more information.
         Run this test in debugger, play around.
         """
-        with ReversePatch(func=tm.FirstClass.success_method) as rp_dto:  # 1 rp_dto contains all needed mocks
-            assert rp_dto.c(*rp_dto.args) == tm.failed_function.return_value  # assert 1
+        with ReversePatch(func=tm.FirstClass.success_method) as rp:  # 1 rp contains all needed mocks
+            assert rp.c(*rp.args) == tm.failed_function.return_value  # assert 1
             tm.failed_function.assert_called_once_with(tm.id.return_value)  # assert 2
-            tm.id.assert_called_once_with(rp_dto.args.method_argument)  # assert 3
-            rp_dto.args.self.failed_method.assert_called_once_with(1, 2)  # assert 4
-            rp_dto.args[0].failed_class_method.assert_called_once_with(1, 2)  # assert 5
-            rp_dto.args[0].failed_static_method.assert_called_once_with(1, 2)  # assert 6
+            tm.id.assert_called_once_with(rp.args.method_argument)  # assert 3
+            rp.args.self.failed_method.assert_called_once_with(1, 2)  # assert 4
+            rp.args[0].failed_class_method.assert_called_once_with(1, 2)  # assert 5
+            rp.args[0].failed_static_method.assert_called_once_with(1, 2)  # assert 6
 ```
 
 Testing method contains five not empty lines and six simple statements, look
@@ -165,12 +165,86 @@ The price is so hi, that one do not write them at all.
 ```python
 class TestFirstClass:
     def test_success_method(self):
-        with ReversePatch(func=tm.FirstClass.success_method) as rp_dto:
-            assert rp_dto.c(*rp_dto.args) == tm.failed_function.return_value
+        with ReversePatch(func=tm.FirstClass.success_method) as rp:
+            assert rp.c(*rp.args) == tm.failed_function.return_value
             tm.my_other_func.assert_called_once_with()
 ```
 
 The entry threshold has been drastically lowered. Such tests are much more likely to be written.
+
+
+## Testing `@propery`
+
+Use `fget` attribute of the property instead of the property itself.
+
+```python
+# example
+class ExampleProperty:
+    @property
+    def message(self):
+        return 'hello'
+```
+
+```python
+# test for example
+class TestExampleProperty:
+    def test_message(self):
+        with ReversePatch(tm.ExampleProperty.message.fget) as rp:  # ! Use fget 
+            assert rp.c(*rp.args) == 'hello'
+```
+
+## Testing logger message interpolation
+
+```python
+import logging
+logger = logging.getLogger('some.logger')
+logger.setLevel(logging.DEBUG)  # if level lower than DEBUG, debug message will not be interpolated
+
+
+def do_log_debug_fail():
+    """
+    Calls logger with wrong message template
+    """
+    # TypeError: not all arguments converted during string formatting
+    logger.debug('debug %s', 'fail', 1)
+```
+
+We want to test debug message matches other arguments passed to its call.
+
+```python
+    def test_do_log_debug_success(self):
+        with ReversePatch(tm.do_log_debug_success, exclude_set={'logging', 'logger'}) as rp:
+            with PatchLogger(tm.logger):
+                assert rp.c(*rp.args) is None
+```
+
+## Unpacking ReversePatchDTO
+
+`ReversePatchDTO` supports unpacking. This can be useful to make your tests more compact.
+
+```py
+    def test_rp_dto_unpack(self):
+        with ReversePatch(tm.FirstClass.success_method) as (rp, c, args, s):
+            assert rp.c == c
+            assert rp.args == args
+            assert rp.args.self == s
+
+        with ReversePatch(tm.FirstClass.success_class_method) as (rp, c, args, cls):
+            assert rp.c == c
+            assert rp.args == args
+            assert rp.args.cls == cls
+
+        with ReversePatch(tm.FirstClass.success_static_method) as (rp, c, args, s):
+            assert rp.c == c
+            assert rp.args == args
+            assert s is None
+        # check short form
+        with ReversePatch(tm.FirstClass.success_static_method) as (rp, c, *_):
+            assert rp.c == c
+
+        with ReversePatch(tm.FirstClass.success_method) as (rp, *_, s):
+            assert rp.args.self == s
+```
 
 ## Examples
 
@@ -185,4 +259,3 @@ More useful examples:
 
 All mocks created by `ReversePatch` created with `autospec`. 
 So your tests will defend your code against a human factor in the future, like a dirty refactoring.
-
