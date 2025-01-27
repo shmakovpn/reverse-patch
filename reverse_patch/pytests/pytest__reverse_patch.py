@@ -1,6 +1,5 @@
 from typing import cast
 import pytest
-from dataclasses import dataclass
 from unittest.mock import NonCallableMock, Mock, MagicMock, patch
 from reverse_patch import (
     ReversePatch,
