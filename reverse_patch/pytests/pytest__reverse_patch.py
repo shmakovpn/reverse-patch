@@ -475,8 +475,9 @@ class TestReversePatch:
         # region expensive_way
         # You have to mock all attributes of an instance of the class using in testing method.
         # This way may be expensive
-        with patch.object(tm.InitCase, 'x', create=True):  # mock 1
-            with patch.object(tm.InitCase, 'y', create=True):  # mock 2
+        # Note: here we use 40 and 50, not mock objects, because in python3.10 will 'Cannot autospec a Mock object'
+        with patch.object(tm.InitCase, 'x', 40, create=True):  # mock 1
+            with patch.object(tm.InitCase, 'y', 50, create=True):  # mock 2
                 with ReversePatch(tm.InitCase.use_attrs_inited_in__init) as rp:
                     rp.c(*rp.args)
         # endregion expensive_way

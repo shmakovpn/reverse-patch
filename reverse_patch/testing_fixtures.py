@@ -7,11 +7,11 @@ from unittest.mock import Mock, MagicMock
 logger = logging.getLogger('reverse_patch')
 MODULE_CONST = '_module_const'
 
-# SomeMock = Mock()
-# """Check that ReversePatch will not fail to infinity recursion, if a mock in the testing module"""
-#
-# SomeMagicMock = MagicMock()
-# """Check that ReversePatch will not fail to infinity recursion, if a magic mock in the testing module"""
+SomeMock = Mock()
+"""Check python3.10 will not 'Cannot autospec a Mock object' """
+
+SomeMagicMock = MagicMock()
+"""Check python3.10 will not 'Cannot autospec a Mock object' """
 
 
 def failed_function(x):
@@ -204,6 +204,7 @@ class InitCase:
     """
     # there is no `x` attribute
     # there is no `y` attribute
+    z = Mock()
 
     def __init__(self, x, y):
         self.x = x
@@ -229,8 +230,10 @@ def do_log_debug_fail():
 
 
 class ClassWithMocks:
-    # mock_attribute = Mock()
-    # magic_mock_attribute = Mock()
+    mock_attribute = Mock()
+    """checks python 3.10 will not 'Cannot autospec a Mock object' """
+    magic_mock_attribute = MagicMock()
+    """checks python 3.10 will not 'Cannot autospec a Mock object' """
 
     def some_method(self):
         return f'hello {self.__class__.__name__}'

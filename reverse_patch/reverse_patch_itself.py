@@ -431,6 +431,9 @@ class ReversePatch:
             if identifier_value is self._func:
                 continue
 
+            if isinstance(identifier_value, Mock):
+                continue  # do not mock that has already mocked
+
             if len(patching_list) and identifier == getattr(patching_list[0], '_mock_name'):
                 continue  #
 
@@ -456,6 +459,9 @@ class ReversePatch:
                 identifier: IdentifierName
 
                 parent = getattr(parent, identifier)
+
+            if isinstance(getattr(parent, identifier_path.split('.')[-1], None), Mock):
+                continue  # python 3.10 does not not support autospec on that already mocked
 
             patcher = patch.object(parent, identifier_path.split('.')[-1], create=True)
             patcher.__enter__()
