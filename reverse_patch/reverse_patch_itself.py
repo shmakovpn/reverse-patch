@@ -1,6 +1,6 @@
 from typing import Callable, List, ContextManager, Set, Optional, Dict, NewType, Union, Any
 from types import ModuleType
-from dataclasses import dataclass
+import dataclasses
 import sys
 import inspect
 from unittest.mock import Mock, patch, MagicMock
@@ -13,6 +13,9 @@ __all__ = (
     'ArgsKwargs',
     'ReversePatchDTO',
     'ReversePatch',
+    'Rp',
+    'ResultReversePatchDTO',
+    'Rc',
 )
 
 ArgumentName = NewType('ArgumentName', str)
@@ -102,7 +105,7 @@ class ArgsKwargs(list):
         super().append(argument_value)
 
 
-@dataclass
+@dataclasses.dataclass
 class CallableDTO:
     args: ArgsKwargs
     """
@@ -113,7 +116,7 @@ class CallableDTO:
     """callable, you have to call in your unit-test like: `rp.c(*rp.args)`"""
 
 
-@dataclass
+@dataclasses.dataclass
 class ReversePatchDTO:
     """
     Patching result. Mock arguments and callable to call.
@@ -434,6 +437,9 @@ class ReversePatch:
             if isinstance(identifier_value, Mock):
                 continue  # do not mock that has already mocked
 
+            if inspect.isclass(identifier_value) and issubclass(identifier_value, Exception):
+                continue  # skip exception classes
+
             if len(patching_list) and identifier == getattr(patching_list[0], '_mock_name'):
                 continue  #
 
@@ -507,3 +513,38 @@ class ReversePatch:
             patching_list.append(current_object)
 
         return patching_list
+
+
+class Rp(ReversePatch):
+    """ shortcut for ReversePatch. """
+    pass
+
+
+@dataclasses.dataclass
+class ResultReversePatchDTO(ReversePatchDTO):
+    """ReversePatchDTO with result of `rp.c(*rp.args)`"""
+    r: Any
+    """result of `rp.c(*rp.args)`"""
+
+    def __iter__(self):
+        """
+        with Rc(f) as r, rp, c, args, s:
+            assert rp.c == c
+            assert rp.args == args
+            assert rp.args.self == s  # or assert rp.args.cls == s
+        """
+        yield self.r
+        yield from super().__iter__()
+
+
+class Rc(Rp):
+    """
+    `Rc` automatically perform `r = rp.c(*rp.args)`.
+    Its `__enter__` returns `ResultReversePatchDTO` which `r` attribute contains the result of `rp.c(*rp.args)`.
+    Thus `Rc` is more short version of `ReversePath`.
+    """
+    def __enter__(self) -> ResultReversePatchDTO:
+        rp: ReversePatchDTO = super().__enter__()
+        result = rp.c(*rp.args)
+        rc = ResultReversePatchDTO(r=result, args=rp.args, c=rp.c, exclusions=rp.exclusions)
+        return rc

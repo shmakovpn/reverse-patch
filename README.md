@@ -246,6 +246,88 @@ We want to test debug message matches other arguments passed to its call.
             assert rp.args.self == s
 ```
 
+## Including (`include_set`) and excluding (`exclude_set`)
+
+Sometime we want to patch some builtins, like `id`, `open`, `type`, etc.
+This is available using `include_set`.
+
+```py
+    def test_success_static_method__include(self):
+        with ReversePatch(tm.FirstClass.success_static_method__include, include_set={'type'}) as rp:
+            r = rp.c(*rp.args)
+            assert r == m(m(tm).type).return_value
+```
+`id` function is in `include_set` by default.
+
+Note: `exclude_set` has more priority than `include_set`. So, if you put `id` in `exclude_set`, it will not be patched.
+Example:
+
+```py
+    def test_success_static_method__exclude(self):
+        with ReversePatch(tm.FirstClass.success_static_method__exclude, exclude_set={'id'}) as rp:
+            r = rp.c(*rp.args)
+            assert isinstance(r, int)  # id was not patched
+```
+
+Note: python3.10 cannot mock that already mocked. ReversePatch will exclude mock objects from patching.
+It is not possible to patch them using `include_set` or any other way.
+
+In `exclude_set` you can use object itself or its python path. 
+The excluded object will be collected in ReversePathDTO in `exclusions` dictionary.
+Also, you can access it using both ways, the object itself or its python path.
+
+```py
+        # region exclude_set
+        with ReversePatch(tm.InitCase.use_attrs_inited_in__init, exclude_set={tm.InitCase.__init__}) as rp:
+            rp.exclusions[tm.InitCase.__init__].c(*rp.exclusions[tm.InitCase.__init__].args)
+            rp.c(*rp.args)
+
+        with ReversePatch(tm.InitCase.use_attrs_inited_in__init, exclude_set={'InitCase.__init__'}) as rp:
+            rp.exclusions[tm.InitCase.__init__].c(*rp.exclusions[tm.InitCase.__init__].args)
+            rp.c(*rp.args)
+
+        with ReversePatch(tm.InitCase.use_attrs_inited_in__init, exclude_set={'InitCase.__init__'}) as rp:
+            rp.exclusions[tm.InitCase.__init__].c(*rp.exclusions['InitCase.__init__'].args)
+            rp.c(*rp.args)
+        # endregion exclude_set
+```
+
+Exception classes will be excluded. You can use `include_set` to force patch this classes.
+
+```py
+    def test_skip_exception_classes(self):
+        with ReversePatch(tm.raise_some_exception) as rp:
+            # SomeException will not be mocked be default
+            with pytest.raises(tm.SomeException):
+                rp.c(*rp.args)
+
+        with ReversePatch(tm.raise_some_exception, include_set={'SomeException'}) as rp:
+            # raise SomeException, if SomeException is a mock object, will produce TypeError
+            with pytest.raises(TypeError):  
+                rp.c(*rp.args)
+```
+
+## Shortcuts
+
+`Rp` is the same as `ReversePath`.
+
+```py
+    def test_rp_shortcut__success_method(self):
+        with Rp(tm.FirstClass.success_method) as rp:
+            rp.c(*rp.args)
+```
+
+`Rc` automatically perform `r = rp.c(*rp.args)`. 
+Use `Rc` instead of `Rp` or `ReversePatch`. 
+This is more short and convenient way.
+
+```py
+    def test_rc_shortcut__success_method(self):
+        with Rc(tm.FirstClass.success_method) as rc:
+            # do not need `r = rp.c(*rp.args)`
+            assert rc.r == m(tm.failed_function).return_value
+```
+
 ## Examples
 
 Please, look `pytest__reverse_patch`, self-documented file contains the most usage examples, 
@@ -254,6 +336,7 @@ those checks `ReversePatch` using `ReversePatch` itself.
 More useful examples:
 - TestReversePatch.test_success_method
 - TestReversePatch.test_success_class_method
+- TestReversePatch.test_use_attrs_inited_in__init
 
 ## Bonus
 

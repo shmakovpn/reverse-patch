@@ -7,6 +7,8 @@ from reverse_patch import (
     ArgumentName,
     IdentifierName,
     m,
+    Rp,
+    Rc,
 )
 import reverse_patch.testing_fixtures as tm
 from reverse_patch.patch_logger import PatchLogger
@@ -437,7 +439,7 @@ class TestReversePatch:
         """
         with ReversePatch(tm.FirstClass.success_static_method__include, include_set={IdentifierName('type')}) as rp:
             r = rp.c(*rp.args)
-            assert r == tm.type.return_value  # noqa type is MagicMock, and has `return_value`
+            assert r == m(m(tm).type).return_value
 
     def test_success_static_method__exclude(self):
         """
@@ -551,6 +553,68 @@ class TestReversePatch:
         with ReversePatch(tm.FirstClass.success_method) as (rp, *_, s):
             assert rp.args.self == s
 
+    def test_skip_exception_classes(self):
+        with ReversePatch(tm.raise_some_exception) as rp:
+            # SomeException will not be mocked be default
+            with pytest.raises(tm.SomeException):
+                rp.c(*rp.args)
+
+        with ReversePatch(tm.raise_some_exception, include_set={'SomeException'}) as rp:
+            # raise SomeException, if SomeException is a mock object, will produce TypeError
+            with pytest.raises(TypeError):
+                rp.c(*rp.args)
+
+    def test_classes_with_mocks(self):
+        """Test class with mocks can be patched"""
+        with ReversePatch(tm.ClassWithMocks.some_method) as rp:
+            assert rp.c(*rp.args) == 'hello ClassWithMocks'
+
+    def test_rp_shortcut__success_method(self):
+        """
+        Test `success_method` using `Rp` shortcut instead of `ReversePath`.
+        """
+        with Rp(tm.FirstClass.success_method) as rp:
+            rp.c(*rp.args)
+
+    def test_rc_shortcut__success_method(self):
+        """
+        `Rc` automatically perform `r = rp.c(*rp.args)`.
+        """
+        with Rc(tm.FirstClass.success_method) as rc:
+            # do not need `r = rp.c(*rp.args)`
+            assert rc.r == m(tm.failed_function).return_value
+
+    def test_rc_dto_unpack(self):
+        """
+        Use `Rc` instead of `Rp` or `ReversePatch`.
+        This is more short and convenient way.
+        """
+        with Rc(tm.FirstClass.success_method) as (r, rc, c, args, s):
+            assert rc.r == r
+            assert rc.c == c
+            assert rc.args == args
+            assert rc.args.self == s
+
+        with Rc(tm.FirstClass.success_class_method) as (r, rc, c, args, cls):
+            assert rc.r == r
+            assert rc.c == c
+            assert rc.args == args
+            assert rc.args.cls == cls
+
+        with Rc(tm.FirstClass.success_static_method) as (r, rc, c, args, s):
+            assert rc.r == r
+            assert rc.c == c
+            assert rc.args == args
+            assert s is None
+        # check short form
+        with Rc(tm.FirstClass.success_static_method) as (r, rc, c, *_):
+            assert rc.r == r
+            assert rc.c == c
+
+        with Rc(tm.FirstClass.success_method) as (r, rc, *_, s):
+            assert rc.r == r
+            assert rc.args.self == s
+
 
 class TestArgsKwargs:
     def test_args_kwargs(self):
@@ -583,10 +647,3 @@ class TestUtilsM:
     def test_m(self):
         """check that m is a shortcut for cast(Mock, arg)"""
         assert m('hello') == 'hello'
-
-
-class TestClassWithMocks:
-    """Test class with mocks can be patched"""
-    def test_some_method(self):
-        with ReversePatch(tm.ClassWithMocks.some_method) as rp:
-            assert rp.c(*rp.args) == 'hello ClassWithMocks'

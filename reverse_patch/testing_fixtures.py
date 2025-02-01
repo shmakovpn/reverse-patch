@@ -14,6 +14,14 @@ SomeMagicMock = MagicMock()
 """Check python3.10 will not 'Cannot autospec a Mock object' """
 
 
+class SomeException(RuntimeError):
+    """Exceptions have to be excluded from patching"""
+
+
+def raise_some_exception():
+    raise SomeException()
+
+
 def failed_function(x):
     raise RuntimeError(f'failed_one: {x}')
 
