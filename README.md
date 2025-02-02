@@ -1,5 +1,8 @@
 # reverse-patch
 
+![Tests](https://github.com/shmakovpn/reverse-patch/actions/workflows/python-package.yml/badge.svg)
+[![Coverage](https://codecov.io/gh/shmakovpn/reverse-patch/branch/main/graph/badge.svg)](https://codecov.io/gh/shmakovpn/reverse-patch)
+
 Unit-test writing revolution!!
 
 The `reverse-patch` way is:
