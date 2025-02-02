@@ -328,6 +328,34 @@ This is more short and convenient way.
             assert rc.r == m(tm.failed_function).return_value
 ```
 
+`Rcl` like `Rc`, it automatically does `r = rp.c(*rp.args)`.
+Also, it uses `PatchLogger` and exclude `logging` and `logger` identifiers in the testing module.
+
+Thus, code below can be more short.
+
+```py
+    def test_do_log_debug_success(self):
+        with ReversePatch(tm.do_log_debug_success, exclude_set={'logging', 'logger'}) as rp:
+            with PatchLogger(tm.logger):
+                assert rp.c(*rp.args) is None
+```
+
+Like this.
+
+```py
+    def test_do_log_debug_success__via_shortcut(self):
+        with Rcl(tm.do_log_debug_success):
+            pass
+```
+
+Note: `Rcl` works only if your testing module imports `logging` and creates a logger with identifier name `logger`.
+
+```py
+# testing module
+import logging  # Rcl requires
+logger = logging.getLogger('my_logger')  # Rcl requires
+```
+
 ## Examples
 
 Please, look `pytest__reverse_patch`, self-documented file contains the most usage examples, 

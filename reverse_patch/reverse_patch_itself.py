@@ -1,9 +1,11 @@
 from typing import Callable, List, ContextManager, Set, Optional, Dict, NewType, Union, Any
 from types import ModuleType
+import logging
 import dataclasses
 import sys
 import inspect
 from unittest.mock import Mock, patch, MagicMock
+from .patch_logger import PatchLogger
 
 __all__ = (
     'ArgumentName',
@@ -16,6 +18,7 @@ __all__ = (
     'Rp',
     'ResultReversePatchDTO',
     'Rc',
+    'Rcl',
 )
 
 ArgumentName = NewType('ArgumentName', str)
@@ -276,9 +279,14 @@ class ReversePatch:
             self._exclude_first_object_path_identifier_set | exclude_first_object_path_identifier_set
         )
 
-    def __enter__(self) -> ReversePatchDTO:
+    def _get_testing_module(self) -> ModuleType:
+        """Returns the module of the testing function or method"""
         module_path: str = getattr(self._func, '__module__')
         testing_module: ModuleType = sys.modules[module_path]
+        return testing_module
+
+    def __enter__(self) -> ReversePatchDTO:
+        testing_module: ModuleType = self._get_testing_module()
         fake_parent_module = FakeModule(tm=testing_module)
 
         patcher = patch.object(fake_parent_module, 'tm', autospec=True)
@@ -545,6 +553,70 @@ class Rc(Rp):
     """
     def __enter__(self) -> ResultReversePatchDTO:
         rp: ReversePatchDTO = super().__enter__()
-        result = rp.c(*rp.args)
-        rc = ResultReversePatchDTO(r=result, args=rp.args, c=rp.c, exclusions=rp.exclusions)
-        return rc
+
+        try:
+            result = rp.c(*rp.args)
+        except Exception:
+            self.__exit__(None, None, None)
+            raise
+        else:
+            rc = ResultReversePatchDTO(r=result, args=rp.args, c=rp.c, exclusions=rp.exclusions)
+            return rc
+
+
+class Rcl(Rp):
+    """
+    `Rcl` extends `ReversePath` for testing code, that including logging.
+    `Rcl` work like `Rc`, it perform `r = rp.c(*rp.args)` automatically.
+    It is very easy to make a mistake in message template and other arguments, like `logger.debug("%s %s", arg1)`.
+    This code will produce `TypeError: not enough arguments for format string`. We need to patch `debug` method.
+
+    Long example, without Rcl
+    ```py
+    def test_do_log_debug_success(self):
+        with ReversePatch(tm.do_log_debug_success, exclude_set={'logging', 'logger'}) as rp:
+            with PatchLogger(tm.logger):
+                assert rp.c(*rp.args) is None
+    ```
+
+    Sort example.
+    ```py
+    ```
+    """
+    _patch_logger_manager: Optional[PatchLogger] = None
+
+    def __init__(
+        self,
+        func: Callable,
+        include_set: Optional[Set[Union[IdentifierName, IdentifierPath, str]]] = None,
+        exclude_set: Optional[Set[Union[IdentifierName, IdentifierPath, Callable, str]]] = None
+    ):
+        exclude_set_: Optional[Set[Union[IdentifierName, IdentifierPath, Callable, str]]] = {
+            IdentifierName('logging'),
+            IdentifierName('logger'),
+        }
+
+        if exclude_set is not None:
+            exclude_set_ = exclude_set_ | exclude_set
+
+        super().__init__(func=func, include_set=include_set, exclude_set=exclude_set_)
+
+    def __enter__(self) -> ResultReversePatchDTO:
+        rp: ReversePatchDTO = super().__enter__()
+        testing_module: ModuleType = self._get_testing_module()
+        logger_: logging.Logger = getattr(testing_module, 'logger')
+        self._patch_logger_manager = PatchLogger(logger=logger_).__enter__()
+
+        try:
+            result = rp.c(*rp.args)
+        except Exception:
+            self.__exit__(None, None, None)
+            raise
+        else:
+            rc = ResultReversePatchDTO(r=result, args=rp.args, c=rp.c, exclusions=rp.exclusions)
+            return rc
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._patch_logger_manager is not None:
+            self._patch_logger_manager.__exit__(None, None, None)
+        super().__exit__(exc_type, exc_val, exc_tb)

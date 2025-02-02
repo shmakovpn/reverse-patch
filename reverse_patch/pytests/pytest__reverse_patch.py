@@ -9,6 +9,7 @@ from reverse_patch import (
     m,
     Rp,
     Rc,
+    Rcl,
 )
 import reverse_patch.testing_fixtures as tm
 from reverse_patch.patch_logger import PatchLogger
@@ -516,10 +517,6 @@ class TestReversePatch:
             rp.c(*rp.args)
         # endregion exclude_set
 
-        # region exclude_set
-
-        # endregion exclude_set
-
     def test_do_log_debug_success(self):
         with ReversePatch(tm.do_log_debug_success, exclude_set={'logging', 'logger'}) as rp:
             with PatchLogger(tm.logger):
@@ -530,6 +527,15 @@ class TestReversePatch:
             with PatchLogger(tm.logger):
                 with pytest.raises(TypeError):
                     assert rp.c(*rp.args) is None
+
+    def test_do_log_debug_success__via_shortcut(self):
+        with Rcl(tm.do_log_debug_success):
+            pass
+
+    def test_do_log_debug_fail__via_shortcut(self):
+        with pytest.raises(TypeError):
+            with Rcl(tm.do_log_debug_fail):
+                pass  # todo shmakovpn сайд эффектит остальные тесты
 
     def test_rp_dto_unpack(self):
         with ReversePatch(tm.FirstClass.success_method) as (rp, c, args, s):

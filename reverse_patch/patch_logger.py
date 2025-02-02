@@ -36,9 +36,11 @@ class PatchLogger:
     def _mock_log_method(msg, *args, **kwargs):
         msg % tuple(arg for arg in args)
 
-    def __enter__(self):
+    def __enter__(self) -> 'PatchLogger':
         for patcher in self._patchers:
             patcher.__enter__()
+
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         for patcher in reversed(self._patchers):
