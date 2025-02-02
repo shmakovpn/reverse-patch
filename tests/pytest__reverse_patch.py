@@ -517,6 +517,18 @@ class TestReversePatch:
             rp.c(*rp.args)
         # endregion exclude_set
 
+    def test_exclusions(self):
+        with ReversePatch(tm.FirstClass.success_method, exclude_set={'FirstClass.first_class_const'}) as rp:
+            assert rp.exclusions['FirstClass.first_class_const'].o
+
+        with ReversePatch(tm.FirstClass.success_method, exclude_set={'FirstClass.failed_method'}) as rp:
+            assert rp.exclusions['FirstClass.failed_method'].c
+            assert rp.exclusions[tm.FirstClass.failed_method].c
+
+        with ReversePatch(tm.FirstClass.success_method, exclude_set={tm.FirstClass.failed_method}) as rp:
+            assert rp.exclusions['FirstClass.failed_method'].c
+            assert rp.exclusions[tm.FirstClass.failed_method].c
+
     def test_do_log_debug_success(self):
         with ReversePatch(tm.do_log_debug_success, exclude_set={'logging', 'logger'}) as rp:
             with PatchLogger(tm.logger):
@@ -535,7 +547,7 @@ class TestReversePatch:
     def test_do_log_debug_fail__via_shortcut(self):
         with pytest.raises(TypeError):
             with Rcl(tm.do_log_debug_fail):
-                pass  # todo shmakovpn сайд эффектит остальные тесты
+                pass
 
     def test_rp_dto_unpack(self):
         with ReversePatch(tm.FirstClass.success_method) as (rp, c, args, s):

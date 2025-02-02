@@ -110,6 +110,7 @@ class ArgsKwargs(list):
 
 @dataclasses.dataclass
 class CallableDTO:
+    """Information of excluded from patching (mocking) callable object"""
     args: ArgsKwargs
     """
     The list of arguments, 
@@ -117,6 +118,13 @@ class CallableDTO:
     """
     c: Callable
     """callable, you have to call in your unit-test like: `rp.c(*rp.args)`"""
+
+
+@dataclasses.dataclass
+class NotCallableDTO:
+    """Information of excluded from patching (mocking) notcallable object"""
+    o: Any
+    """excluded object itself"""
 
 
 @dataclasses.dataclass
@@ -132,7 +140,7 @@ class ReversePatchDTO:
     """
     c: Callable
     """callable, you have to call in your unit-test like: `rp.c(*rp.args)`"""
-    exclusions: Dict[Union[Callable, IdentifierPath, str], CallableDTO]
+    exclusions: Dict[Union[Callable, IdentifierPath, str], Union[CallableDTO, NotCallableDTO]]
     """The list of arguments for excluded callable"""
 
     def __iter__(self):
@@ -339,14 +347,22 @@ class ReversePatch:
                                 patcher = patch.object(
                                     parent_object, f'm{exclude_identifier}', exclude_object, create=True
                                 )
-                                exclusion_dto: CallableDTO = self._get_args_and_callable(
+                            else:
+                                patcher = patch.object(parent_object, exclude_identifier, exclude_object)
+
+                            if callable(exclude_object):
+                                callable_exclusion_dto: CallableDTO = self._get_args_and_callable(
                                     func=exclude_object,
                                     patching_list=[parent_object],
                                 )
-                                exclusions[exclude_object] = exclusion_dto
-                                exclusions[exclude_path] = exclusion_dto
+                                exclusions[exclude_object] = callable_exclusion_dto
+                                exclusions[exclude_path] = callable_exclusion_dto
                             else:
-                                patcher = patch.object(parent_object, exclude_identifier, exclude_object)
+                                notcallable_exclusion_dto: NotCallableDTO = NotCallableDTO(o=exclude_object)
+                                # in case of notcallable object exclusion, we cannot put it as a key of
+                                # the exclusion dict
+                                # exclusions[exclude_object] = notcallable_exclusion_dto  # don't uncomment !!
+                                exclusions[exclude_path] = notcallable_exclusion_dto
 
                         patcher.__enter__()
                         self._patchers.append(patcher)
@@ -619,4 +635,5 @@ class Rcl(Rp):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._patch_logger_manager is not None:
             self._patch_logger_manager.__exit__(None, None, None)
+            self._patch_logger_manager = None
         super().__exit__(exc_type, exc_val, exc_tb)

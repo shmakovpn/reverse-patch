@@ -1,5 +1,12 @@
 .idea/
-.pytest_cache
+venv/
+*.pyc
+
+#
+dist/
+__pycache__/
+*.egg-info/
+.eggs/
 
 # IDE - VSCode
 .vscode/*
@@ -7,3 +14,24 @@
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+# sphinx files
+doc/build/html/
+doc/build/doctrees/
+_build
+_static
+_templates
+
+# codecov
+.coverage
+coverage/
+
+# nodejs
+node_modules/
+
+# pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+

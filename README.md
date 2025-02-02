@@ -1,6 +1,17 @@
-# reverse_patch
+# reverse-patch
 
 Unit-test writing revolution!!
+
+The `reverse-patch` way is:
+
+ - One unit test for one function or method.
+ - One patch for one unit test.
+
+# Installation
+
+```bash
+pip install reverse-patch
+```
 
 # The problem
 
