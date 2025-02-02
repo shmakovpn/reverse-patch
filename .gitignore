@@ -25,6 +25,7 @@ _templates
 # codecov
 .coverage
 coverage/
+coverage.xml
 
 # nodejs
 node_modules/
