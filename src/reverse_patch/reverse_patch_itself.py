@@ -1,4 +1,4 @@
-from typing import Callable, List, ContextManager, Set, Optional, Dict, NewType, Union, Any
+from typing import Callable, List, ContextManager, Set, Optional, Dict, NewType, Union, Any, cast
 from types import ModuleType
 import logging
 import dataclasses
@@ -86,19 +86,19 @@ class ArgsKwargs(list):
     """
     _index_map: Dict[ArgumentName, ArgumentIndex] = {}  # {'argument name': argument index}
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._index_map: Dict[ArgumentName, ArgumentIndex] = {}
 
-    def __getattr__(self, item: ArgumentName) -> MagicMock:
+    def __getattr__(self, item: str) -> MagicMock:
         try:
-            return super().__getitem__(self._index_map[item])
+            return super().__getitem__(self._index_map[ArgumentName(item)])
         except KeyError:
             raise AttributeError(item)
 
-    def __setattr__(self, key, value):
+    def __setattr__(self, key: str, value: MagicMock):
         if key not in dir(self):
-            super().__setitem__(self._index_map[key], value)
+            super().__setitem__(self._index_map[ArgumentName(key)], value)
         else:
             super().__setattr__(key, value)
 
@@ -122,7 +122,7 @@ class CallableDTO:
 
 @dataclasses.dataclass
 class NotCallableDTO:
-    """Information of excluded from patching (mocking) notcallable object"""
+    """Information of excluded from patching (mocking) not_callable object"""
     o: Any
     """excluded object itself"""
 
@@ -140,7 +140,7 @@ class ReversePatchDTO:
     """
     c: Callable
     """callable, you have to call in your unit-test like: `rp.c(*rp.args)`"""
-    exclusions: Dict[Union[Callable, IdentifierPath, str], Union[CallableDTO, NotCallableDTO]]
+    exclusions: Dict[Union[Callable, IdentifierPath], Union[CallableDTO, NotCallableDTO]]
     """The list of arguments for excluded callable"""
 
     def __iter__(self):
@@ -183,7 +183,7 @@ class ReversePatch:
     ```
     """
 
-    _include_set: Set[Union[IdentifierName, IdentifierPath]] = {'id'}
+    _include_set: Set[Union[IdentifierName, IdentifierPath]] = {IdentifierName('id')}
     """
     Identifiers (variables) names or qualified names which have to be mocked
 
@@ -197,7 +197,7 @@ class ReversePatch:
         tm.something.assert_called_once_with(type_=tm.type.return_value)  # using mocked `type` return value
     ```
     """
-    _exclude_set: Set[Union[IdentifierName, Callable]] = set()
+    _exclude_set: Set[Union[IdentifierName, IdentifierPath, Callable]] = set()
     """
     Identifiers (variables) names or objects which have to be excluded from mocking
 
@@ -241,13 +241,17 @@ class ReversePatch:
         """ Applied patchers in __enter__, to exit in __exit__ """
 
         if include_set:
-            self._include_set: Set[IdentifierName] = self._include_set | include_set
+            self._include_set: Set[Union[IdentifierName, IdentifierPath]] = (
+                    self._include_set | cast(Set[Union[IdentifierName, IdentifierPath]], include_set)
+            )
             """
             set of identifiers (variables) names, which need to be mocked, like: {'type'}
             """
 
         if exclude_set:
-            self._exclude_set: Set[Union[IdentifierName, Callable]] = self._exclude_set | exclude_set
+            self._exclude_set: Set[Union[IdentifierName, IdentifierPath, Callable]] = (
+                    self._exclude_set | cast(Set[Union[IdentifierName, IdentifierPath, Callable]], exclude_set)
+            )
             """
             set of identifiers (variables) names, which will excluding from mocking, like: {'my_func'}
             """
@@ -255,15 +259,15 @@ class ReversePatch:
 
     def _init_exclusions(self) -> None:
         exclude_path_set: Set[IdentifierPath] = {
-            exclude_path for exclude_path in self._exclude_set
+            IdentifierPath(exclude_path) for exclude_path in self._exclude_set
             if isinstance(exclude_path, str) and '.' in exclude_path
         }
         exclude_first_path_identifier_set: Set[IdentifierName] = {
-            exclude_path.split('.')[0] for exclude_path in self._exclude_set
+            IdentifierName(exclude_path.split('.')[0]) for exclude_path in self._exclude_set
             if isinstance(exclude_path, str) and '.' in exclude_path
         }
         exclude_identifier_set: Set[IdentifierName] = {
-            exclude_identifier for exclude_identifier in self._exclude_set
+            IdentifierName(exclude_identifier) for exclude_identifier in self._exclude_set
             if isinstance(exclude_identifier, str) and '.' not in exclude_identifier
         }
         exclude_object_set: Set[Callable] = {
@@ -280,8 +284,8 @@ class ReversePatch:
         self._exclude_first_path_identifier_set = (
             self._exclude_first_path_identifier_set | exclude_first_path_identifier_set
         )
-        exclude_first_object_path_identifier_set = {
-            exclude_object_path.split('.')[0] for exclude_object_path in self._exclude_object_path_set
+        exclude_first_object_path_identifier_set: Set[IdentifierName] = {
+            IdentifierName(exclude_object_path.split('.')[0]) for exclude_object_path in self._exclude_object_path_set
         }
         self._exclude_first_object_path_identifier_set = (
             self._exclude_first_object_path_identifier_set | exclude_first_object_path_identifier_set
@@ -311,28 +315,23 @@ class ReversePatch:
         )
         self._patch_include_set(testing_module=testing_module)
 
-        exclusions: Dict[Union[Callable, IdentifierPath], CallableDTO] = {}
+        exclusions: Dict[Union[Callable, IdentifierPath], Union[CallableDTO, NotCallableDTO]] = {}
         all_exclude_set = self._exclude_path_set | self._exclude_object_path_set
 
+        exclude_path: IdentifierPath
         for exclude_path in all_exclude_set:
-            exclude_path: IdentifierPath
             exclude_object: Callable = self._getattr_by_path(obj=testing_module, path=exclude_path)
 
-            # region experiment
-            # exclude_module_path: Optional[str] = getattr(exclude_object, '__module__', None)
-            # if not exclude_module_path:
-            #     raise ValueError(f'exclude_object does not have attribute `__module__`: {exclude_object}')
-            # endregion experiment
-
-            exclude_identifiers = exclude_path.split('.')
+            exclude_identifiers: List[IdentifierName] = cast(List[IdentifierName], exclude_path.split('.'))
             if len(exclude_identifiers) < 2:
                 raise ValueError(f'len(exclude_identifiers)<2')
 
-            if len(patching_list):  # and patching_list[0] == getattr(mocked_module, exclude_identifiers[0]):
+            if len(patching_list):
                 parent_object: MagicMock = mocked_module
+
+                idx: int
+                exclude_identifier: IdentifierName
                 for idx, exclude_identifier in enumerate(exclude_identifiers):
-                    idx: int
-                    exclude_identifier: IdentifierName
                     current_object = getattr(parent_object, exclude_identifier)
 
                     if len(patching_list) > idx and patching_list[idx] == current_object:
@@ -345,10 +344,17 @@ class ReversePatch:
                                 # it is not possible to set `__init__` attribute in MagicMock instance
                                 # in case of `__init__` use `m__init__` instead
                                 patcher = patch.object(
-                                    parent_object, f'm{exclude_identifier}', exclude_object, create=True
+                                    parent_object,
+                                    f'm{exclude_identifier}',
+                                    cast(Mock, exclude_object),  # mypy hack
+                                    create=True,
                                 )
                             else:
-                                patcher = patch.object(parent_object, exclude_identifier, exclude_object)
+                                patcher = patch.object(
+                                    parent_object,
+                                    exclude_identifier,
+                                    cast(Mock, exclude_object),  # mypy hack
+                                )
 
                             if callable(exclude_object):
                                 callable_exclusion_dto: CallableDTO = self._get_args_and_callable(
@@ -358,11 +364,11 @@ class ReversePatch:
                                 exclusions[exclude_object] = callable_exclusion_dto
                                 exclusions[exclude_path] = callable_exclusion_dto
                             else:
-                                notcallable_exclusion_dto: NotCallableDTO = NotCallableDTO(o=exclude_object)
-                                # in case of notcallable object exclusion, we cannot put it as a key of
+                                not_callable_exclusion_dto: NotCallableDTO = NotCallableDTO(o=exclude_object)
+                                # in case of not_callable object exclusion, we cannot put it as a key of
                                 # the exclusion dict
-                                # exclusions[exclude_object] = notcallable_exclusion_dto  # don't uncomment !!
-                                exclusions[exclude_path] = notcallable_exclusion_dto
+                                # exclusions[exclude_object] = not_callable_exclusion_dto  # don't uncomment !!
+                                exclusions[exclude_path] = not_callable_exclusion_dto
 
                         patcher.__enter__()
                         self._patchers.append(patcher)
@@ -397,8 +403,10 @@ class ReversePatch:
 
     @staticmethod
     def _get_exclude_object_path(exclude_object: Callable) -> IdentifierPath:
+        # noinspection SpellCheckingInspection
         exclude_object_path: Optional[IdentifierPath] = getattr(exclude_object, '__qualname__', None)
         if not exclude_object_path:
+            # noinspection SpellCheckingInspection
             raise ValueError(f'exclude_object does not have attribute `__qualname__: {exclude_object}')
 
         return exclude_object_path
@@ -410,24 +418,24 @@ class ReversePatch:
         c: Callable = func
 
         if cls.is_class_method(class_method=func):
-            c: Callable = getattr(func, '__func__')
+            c = getattr(func, '__func__')
 
             if len(patching_list):
                 args.add_argument(argument_name=ArgumentName('cls'), argument_value=patching_list[-1])
 
+            param_name: str
             for param_name in params.keys():
-                param_name: str
                 args.add_argument(argument_name=ArgumentName(param_name), argument_value=MagicMock())
         else:
-            for param_name in params.keys():
-                param_name: str
+            param_name_: str
+            for param_name_ in params.keys():
                 if len(patching_list):
-                    if param_name == 'self':
-                        args.add_argument(argument_name=ArgumentName(param_name), argument_value=patching_list[-1])
+                    if param_name_ == 'self':
+                        args.add_argument(argument_name=ArgumentName(param_name_), argument_value=patching_list[-1])
                     else:
-                        args.add_argument(argument_name=ArgumentName(param_name), argument_value=MagicMock())
+                        args.add_argument(argument_name=ArgumentName(param_name_), argument_value=MagicMock())
                 else:
-                    args.add_argument(argument_name=ArgumentName(param_name), argument_value=MagicMock())
+                    args.add_argument(argument_name=ArgumentName(param_name_), argument_value=MagicMock())
 
         return CallableDTO(args=args, c=c)
 
@@ -438,8 +446,8 @@ class ReversePatch:
         patching_list: List[MagicMock]
     ):
         """ Move mocks from mocked_module to testing_module """
-        for identifier, identifier_value in testing_module.__dict__.copy().items():
-            identifier: IdentifierName  # The name of the attribute (variable) in the testing module
+        identifier: IdentifierName  # The name of the attribute (variable) in the testing module
+        for identifier, identifier_value in cast(Dict[IdentifierName, Any], testing_module.__dict__.copy()).items():
             all_exclude: Set[IdentifierName] = (
                 self._exclude_identifier_set
                 | self._exclude_first_path_identifier_set
@@ -475,22 +483,23 @@ class ReversePatch:
 
     def _patch_include_set(self, testing_module: ModuleType) -> None:
         """ patches identifiers in defined in include set """
-        exclude_set = self._exclude_identifier_set | self._exclude_path_set | self._exclude_object_path_set
         exclude_set: Set[Union[IdentifierName, IdentifierPath]]
-        include_set = self._include_set - exclude_set  # exclude_set has more priority than include_set
-        include_set: Set[Union[IdentifierName, IdentifierPath]]
+        exclude_set = self._exclude_identifier_set | self._exclude_path_set | self._exclude_object_path_set
 
+        include_set: Set[Union[IdentifierName, IdentifierPath]]
+        include_set = self._include_set - exclude_set  # exclude_set has more priority than include_set
+
+        identifier_path: Union[IdentifierName, IdentifierPath]
         for identifier_path in include_set:
-            identifier_path: Union[IdentifierName, IdentifierPath]
 
             parent = testing_module
 
-            for identifier in identifier_path.split('.')[:-1]:
-                identifier: IdentifierName
-
+            identifier: IdentifierName
+            for identifier in cast(List[IdentifierName], identifier_path.split('.')[:-1]):
                 parent = getattr(parent, identifier)
 
             if isinstance(getattr(parent, identifier_path.split('.')[-1], None), Mock):
+                # noinspection SpellCheckingInspection
                 continue  # python 3.10 does not not support autospec on that already mocked
 
             patcher = patch.object(parent, identifier_path.split('.')[-1], create=True)
@@ -531,8 +540,8 @@ class ReversePatch:
         names: List[str] = qualified_name.split('.')[:-1]
         current_object = mock_module
 
+        name: str
         for name in names:
-            name: str
             current_object = getattr(current_object, name)
             patching_list.append(current_object)
 
@@ -607,7 +616,7 @@ class Rcl(Rp):
         include_set: Optional[Set[Union[IdentifierName, IdentifierPath, str]]] = None,
         exclude_set: Optional[Set[Union[IdentifierName, IdentifierPath, Callable, str]]] = None
     ):
-        exclude_set_: Optional[Set[Union[IdentifierName, IdentifierPath, Callable, str]]] = {
+        exclude_set_: Set[Union[IdentifierName, IdentifierPath, Callable, str]] = {
             IdentifierName('logging'),
             IdentifierName('logger'),
         }

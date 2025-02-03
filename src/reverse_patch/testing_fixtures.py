@@ -8,9 +8,11 @@ logger = logging.getLogger('reverse_patch')
 MODULE_CONST = '_module_const'
 
 SomeMock = Mock()
+# noinspection SpellCheckingInspection
 """Check python3.10 will not 'Cannot autospec a Mock object' """
 
 SomeMagicMock = MagicMock()
+# noinspection SpellCheckingInspection
 """Check python3.10 will not 'Cannot autospec a Mock object' """
 
 
@@ -203,13 +205,14 @@ class FirstClass:
 
 
 class InitCase:
+    # noinspection SpellCheckingInspection
     """
-    An instance of `InitCase` will have `x` and `y` attributes,
-    but `InitCase` will not have these attributes.
-    Because these are attributes of an instance, not the class.
+        An instance of `InitCase` will have `x` and `y` attributes,
+        but `InitCase` will not have these attributes.
+        Because these are attributes of an instance, not the class.
 
-    Thus, mocks for these attributes will not create by default using `autospec=True`.
-    """
+        Thus, mocks for these attributes will not create by default using `autospec=True`.
+        """
     # there is no `x` attribute
     # there is no `y` attribute
     z = Mock()
@@ -239,8 +242,10 @@ def do_log_debug_fail():
 
 class ClassWithMocks:
     mock_attribute = Mock()
+    # noinspection SpellCheckingInspection
     """checks python 3.10 will not 'Cannot autospec a Mock object' """
     magic_mock_attribute = MagicMock()
+    # noinspection SpellCheckingInspection
     """checks python 3.10 will not 'Cannot autospec a Mock object' """
 
     def some_method(self):

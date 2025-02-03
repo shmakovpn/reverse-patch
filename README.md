@@ -2,6 +2,7 @@
 
 ![Tests](https://github.com/shmakovpn/reverse-patch/actions/workflows/python-package.yml/badge.svg)
 [![codecov](https://codecov.io/github/shmakovpn/reverse-patch/graph/badge.svg?token=744XXMAKOZ)](https://codecov.io/github/shmakovpn/reverse-patch)
+![Mypy](https://github.com/shmakovpn/reverse-patch/actions/workflows/python-package.yml/badge.svg)
 
 Unit-test writing revolution!!
 
