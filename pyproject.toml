@@ -12,7 +12,7 @@ where = ["src"]
 
 [project]
 name = "reverse-patch"
-version = "1.0.0"
+version = "1.0.1"
 description = "The utility for writing succinct and maximum shortest unit tests"
 readme = "README.md"
 authors = [{ name = "Pavel Shmakov", email = "shmakovpn@yandex.ru" }]
